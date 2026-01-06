@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Qrompt Navigator",
+  "name": "Slido Navigator",
   "version": "1.0",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],

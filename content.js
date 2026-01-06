@@ -1,11 +1,8 @@
 (function () {
   let sidebar, listContainer, toggleBtn, datePicker, clearBtn;
-  let isSidebarVisible = true;
-  let observer;
   let currentMode = "PROMPTS"; 
 
-  const ICON_MENU = `<svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>`;
-  const ICON_CLOSE = `<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`;
+  const ICON_ARROW = `<svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>`;
 
   function init() {
     if (document.getElementById("gpt-nav-sidebar")) return;
@@ -15,63 +12,45 @@
   }
 
   function createUI() {
+    // 1. Create Arrow Toggle
     toggleBtn = document.createElement("button");
     toggleBtn.id = "gpt-nav-toggle";
-    toggleBtn.innerHTML = ICON_CLOSE; 
-    toggleBtn.classList.add("sidebar-open");
+    toggleBtn.innerHTML = ICON_ARROW; 
     toggleBtn.onclick = toggleSidebar;
     document.body.appendChild(toggleBtn);
 
+    // 2. Create Sidebar
     sidebar = document.createElement("div");
     sidebar.id = "gpt-nav-sidebar";
     
-    const header = document.createElement("div");
-    header.className = "gpt-nav-header";
+    sidebar.innerHTML = `
+      <div class="gpt-nav-header">
+        <span class="gpt-title">Slido</span>
+        <div class="gpt-date-wrapper">
+          <input type="date" id="gpt-date-picker">
+          <button id="gpt-clear-search">Reset</button>
+        </div>
+      </div>
+      <div id="gpt-nav-list"></div>
+    `;
     
-    const title = document.createElement("span");
-    title.className = "gpt-title";
-    title.innerText = "Qrompt";
-    header.appendChild(title);
-
-    const dateWrapper = document.createElement("div");
-    dateWrapper.className = "gpt-date-wrapper";
-
-    datePicker = document.createElement("input");
-    datePicker.type = "date";
-    datePicker.id = "gpt-date-picker";
-    datePicker.addEventListener("change", handleDateSelect);
-
-    clearBtn = document.createElement("button");
-    clearBtn.id = "gpt-clear-search";
-    clearBtn.innerText = "✕";
-    clearBtn.title = "Clear Search";
-    clearBtn.onclick = clearSearch;
-
-    dateWrapper.appendChild(datePicker);
-    dateWrapper.appendChild(clearBtn);
-    header.appendChild(dateWrapper);
-    sidebar.appendChild(header);
-
-    listContainer = document.createElement("div");
-    listContainer.id = "gpt-nav-list";
-    sidebar.appendChild(listContainer);
     document.body.appendChild(sidebar);
+
+    listContainer = sidebar.querySelector("#gpt-nav-list");
+    datePicker = sidebar.querySelector("#gpt-date-picker");
+    clearBtn = sidebar.querySelector("#gpt-clear-search");
+
+    datePicker.addEventListener("change", handleDateSelect);
+    clearBtn.onclick = clearSearch;
   }
 
   function toggleSidebar() {
-    isSidebarVisible = !isSidebarVisible;
-    if (isSidebarVisible) {
-      sidebar.classList.remove("hidden");
-      toggleBtn.classList.add("sidebar-open");
-      toggleBtn.innerHTML = ICON_CLOSE;
-    } else {
-      sidebar.classList.add("hidden");
-      toggleBtn.classList.remove("sidebar-open");
-      toggleBtn.innerHTML = ICON_MENU;
-    }
+    const isOpen = sidebar.classList.toggle('open');
+    toggleBtn.style.right = isOpen ? '310px' : '10px';
+    toggleBtn.style.transform = isOpen ? 'translateY(-50%) rotate(180deg)' : 'translateY(-50%) rotate(0deg)';
   }
 
-  // --- 🔐 AUTH ---
+  // --- API AUTH & FETCH ---
   async function getAccessToken() {
     try {
       const resp = await fetch("https://chatgpt.com/api/auth/session");
@@ -81,17 +60,9 @@
     } catch (e) { return null; }
   }
 
-  // --- 📅 DATE PARSING (FIXED) ---
   function getChatDate(chat) {
     if (!chat.create_time) return null;
-    
-    // FIX: Check if it's a number (Unix timestamp) or String (ISO)
-    if (typeof chat.create_time === 'number') {
-        return new Date(chat.create_time * 1000);
-    } else {
-        // It is an ISO string "2026-01-05T..."
-        return new Date(chat.create_time);
-    }
+    return typeof chat.create_time === 'number' ? new Date(chat.create_time * 1000) : new Date(chat.create_time);
   }
 
   async function handleDateSelect(e) {
@@ -100,72 +71,48 @@
 
     currentMode = "HISTORY"; 
     clearBtn.style.display = "block";
-    listContainer.innerHTML = `<div style="padding:10px; color:#888;">Searching chats...</div>`;
+    listContainer.innerHTML = `<div style="padding:10px; color:#888; font-size:12px;">Fetching from history...</div>`;
 
     try {
       const token = await getAccessToken();
       const headers = token ? { "Authorization": `Bearer ${token}` } : {};
-
       const response = await fetch("https://chatgpt.com/backend-api/conversations?offset=0&limit=100&order=updated", { headers });
-      
-      if (!response.ok) throw new Error("API Error");
       
       const data = await response.json();
       const chats = data.items || [];
 
-      // Filter Logic
       const matches = chats.filter(chat => {
-        const chatDate = getChatDate(chat);
-        if (!chatDate) return false;
-
-        // Compare using local time components
-        const year = chatDate.getFullYear();
-        const month = String(chatDate.getMonth() + 1).padStart(2, '0');
-        const day = String(chatDate.getDate()).padStart(2, '0');
-        const localDateString = `${year}-${month}-${day}`;
-
-        return localDateString === dateValue;
+        const d = getChatDate(chat);
+        if (!d) return false;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === dateValue;
       });
 
       renderHistoryList(matches, dateValue);
-
     } catch (err) {
-      listContainer.innerHTML = `<div style="padding:10px; color:#ff6b6b;">Error: ${err.message}</div>`;
-      console.error(err);
+      listContainer.innerHTML = `<div style="padding:10px; color:#ff6b6b;">Error fetching history</div>`;
     }
   }
 
   function renderHistoryList(matches, dateStr) {
     listContainer.innerHTML = "";
-    
     if (matches.length === 0) {
-      listContainer.innerHTML = `<div style="padding:10px; color:#ccc;">No chats found on <br><b>${dateStr}</b></div>`;
+      listContainer.innerHTML = `<div style="padding:10px; color:#888; font-size:12px;">No chats found on ${dateStr}</div>`;
       return;
     }
 
     matches.forEach(chat => {
       const item = document.createElement("div");
-      item.className = "gpt-nav-item gpt-history-item";
-      
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "gpt-nav-text";
-      titleSpan.style.fontWeight = "bold";
-      titleSpan.innerText = chat.title || "Untitled Chat";
-
-      const timeSpan = document.createElement("span");
-      timeSpan.className = "gpt-history-date";
+      item.className = "gpt-nav-item";
       
       const d = getChatDate(chat);
       const timeStr = d ? d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
-      timeSpan.innerText = timeStr;
 
-      item.appendChild(timeSpan);
-      item.appendChild(titleSpan);
+      item.innerHTML = `
+        <span class="gpt-history-date">${d.toLocaleDateString()} • ${timeStr}</span>
+        <span class="gpt-nav-text" style="font-weight:bold;">${chat.title || "Untitled Chat"}</span>
+      `;
 
-      item.addEventListener("click", () => {
-        window.location.href = `https://chatgpt.com/c/${chat.id}`;
-      });
-
+      item.onclick = () => window.location.href = `https://chatgpt.com/c/${chat.id}`;
       listContainer.appendChild(item);
     });
   }
@@ -178,28 +125,30 @@
     scanPrompts(); 
   }
 
-  // --- PROMPTS LOGIC ---
+  // --- LOCAL PROMPT SCANNING ---
   function scanPrompts() {
     if (currentMode === "HISTORY") return;
     const userMessages = document.querySelectorAll('[data-message-author-role="user"]');
-    const existingNavItems = listContainer.children;
     
-    if (userMessages.length < existingNavItems.length) listContainer.innerHTML = "";
+    // Clear list if user switched chats
+    if (userMessages.length < listContainer.children.length) listContainer.innerHTML = "";
 
-    for (let i = existingNavItems.length; i < userMessages.length; i++) {
+    for (let i = listContainer.children.length; i < userMessages.length; i++) {
       const msg = userMessages[i];
-      const textDiv = msg.innerText || msg.textContent;
-      const cleanText = textDiv.split('\n')[0]; 
+      const cleanText = (msg.innerText || msg.textContent).split('\n')[0]; 
 
       const item = document.createElement("div");
       item.className = "gpt-nav-item";
-      item.innerHTML = `<span class="gpt-nav-index">Q${i + 1}</span><span class="gpt-nav-text">${cleanText || "(Image)"}</span>`;
+      item.innerHTML = `
+        <span class="gpt-nav-index">PROMPT ${i + 1}</span>
+        <span class="gpt-nav-text">${cleanText || "View Prompt"}</span>
+      `;
       
-      item.addEventListener("click", () => {
+      item.onclick = () => {
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
         msg.classList.add("gpt-nav-highlighted");
         setTimeout(() => msg.classList.remove("gpt-nav-highlighted"), 2000);
-      });
+      };
 
       listContainer.appendChild(item);
     }
@@ -207,24 +156,20 @@
 
   function startObserver() {
     let timeout;
-    observer = new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       clearTimeout(timeout);
       timeout = setTimeout(scanPrompts, 1000); 
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  // Detect URL changes (Switching chats)
   let lastUrl = location.href;
   new MutationObserver(() => {
-    const url = location.href;
-    if (url !== lastUrl) {
-      lastUrl = url;
-      if (currentMode === "PROMPTS") {
-        setTimeout(() => {
-            listContainer.innerHTML = ""; 
-            scanPrompts();
-        }, 1500); 
-      }
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      listContainer.innerHTML = "";
+      setTimeout(scanPrompts, 1500);
     }
   }).observe(document, { subtree: true, childList: true });
 
