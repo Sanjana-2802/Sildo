@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Sildo ",
+  "version": "1.0",
+  "description": "Quickly navigate through long ChatGPT conversations with a sidebar index.",
+  "permissions": ["activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
