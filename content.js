@@ -1,56 +1,51 @@
 (function () {
   let sidebar, listContainer, toggleBtn, datePicker, clearBtn;
-  let currentMode = "PROMPTS"; 
+  let currentMode = "PROMPTS";
 
   const ICON_ARROW = `<svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>`;
 
   function init() {
     if (document.getElementById("gpt-nav-sidebar")) return;
     createUI();
-    scanPrompts(); 
+    scanPrompts();
     startObserver();
   }
 
   function createUI() {
-    // 1. Create Arrow Toggle
     toggleBtn = document.createElement("button");
     toggleBtn.id = "gpt-nav-toggle";
-    toggleBtn.innerHTML = ICON_ARROW; 
+    toggleBtn.innerHTML = ICON_ARROW;
     toggleBtn.onclick = toggleSidebar;
     document.body.appendChild(toggleBtn);
 
-    // 2. Create Sidebar
     sidebar = document.createElement("div");
     sidebar.id = "gpt-nav-sidebar";
-    
     sidebar.innerHTML = `
       <div class="gpt-nav-header">
         <span class="gpt-title">Slido</span>
-        <div class="gpt-date-wrapper">
+        <div class="gpt-controls">
           <input type="date" id="gpt-date-picker">
-          <button id="gpt-clear-search">Reset</button>
+          <button id="gpt-clear-btn">Reset</button>
         </div>
       </div>
       <div id="gpt-nav-list"></div>
     `;
-    
     document.body.appendChild(sidebar);
 
     listContainer = sidebar.querySelector("#gpt-nav-list");
     datePicker = sidebar.querySelector("#gpt-date-picker");
-    clearBtn = sidebar.querySelector("#gpt-clear-search");
+    clearBtn = sidebar.querySelector("#gpt-clear-btn");
 
     datePicker.addEventListener("change", handleDateSelect);
-    clearBtn.onclick = clearSearch;
+    clearBtn.onclick = resetUI;
   }
 
   function toggleSidebar() {
     const isOpen = sidebar.classList.toggle('open');
-    toggleBtn.style.right = isOpen ? '310px' : '10px';
+    toggleBtn.style.right = isOpen ? '310px' : '15px';
     toggleBtn.style.transform = isOpen ? 'translateY(-50%) rotate(180deg)' : 'translateY(-50%) rotate(0deg)';
   }
 
-  // --- API AUTH & FETCH ---
   async function getAccessToken() {
     try {
       const resp = await fetch("https://chatgpt.com/api/auth/session");
@@ -60,118 +55,116 @@
     } catch (e) { return null; }
   }
 
-  function getChatDate(chat) {
-    if (!chat.create_time) return null;
-    return typeof chat.create_time === 'number' ? new Date(chat.create_time * 1000) : new Date(chat.create_time);
-  }
-
   async function handleDateSelect(e) {
-    const dateValue = e.target.value; 
-    if (!dateValue) return;
+    const selectedDate = e.target.value;
+    if (!selectedDate) return;
 
-    currentMode = "HISTORY"; 
-    clearBtn.style.display = "block";
-    listContainer.innerHTML = `<div style="padding:10px; color:#888; font-size:12px;">Fetching from history...</div>`;
+    currentMode = "HISTORY";
+    listContainer.innerHTML = `<div style="text-align:center; padding-top:20px; font-size:12px; color:#10a37f;">Searching History...</div>`;
 
     try {
       const token = await getAccessToken();
-      const headers = token ? { "Authorization": `Bearer ${token}` } : {};
-      const response = await fetch("https://chatgpt.com/backend-api/conversations?offset=0&limit=100&order=updated", { headers });
+      if (!token) throw new Error("No Token");
+
+      // We fetch more items (100) to increase the chance of finding the date
+      const resp = await fetch("https://chatgpt.com/backend-api/conversations?offset=0&limit=100&order=updated", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       
-      const data = await response.json();
+      if (!resp.ok) throw new Error("API_REJECTED");
+      
+      const data = await resp.json();
       const chats = data.items || [];
 
-      const matches = chats.filter(chat => {
-        const d = getChatDate(chat);
-        if (!d) return false;
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === dateValue;
+      const filtered = chats.filter(chat => {
+        // Handle different time formats from OpenAI
+        const ts = typeof chat.create_time === 'number' ? chat.create_time * 1000 : chat.create_time;
+        const d = new Date(ts);
+        const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        return iso === selectedDate;
       });
 
-      renderHistoryList(matches, dateValue);
+      renderHistory(filtered, selectedDate);
     } catch (err) {
-      listContainer.innerHTML = `<div style="padding:10px; color:#ff6b6b;">Error fetching history</div>`;
+      console.error(err);
+      listContainer.innerHTML = `
+        <div style="color:#ef4444; font-size:11px; text-align:center; padding:10px; border:1px dashed #ef4444; border-radius:8px;">
+            <b>Access Error</b><br>
+            Please refresh ChatGPT and ensure you are logged in.
+        </div>`;
     }
   }
 
-  function renderHistoryList(matches, dateStr) {
+  function renderHistory(chats, dateStr) {
     listContainer.innerHTML = "";
-    if (matches.length === 0) {
-      listContainer.innerHTML = `<div style="padding:10px; color:#888; font-size:12px;">No chats found on ${dateStr}</div>`;
+    if (chats.length === 0) {
+      listContainer.innerHTML = `<div style="text-align:center; font-size:12px; color:#666;">No chats found for ${dateStr}</div>`;
       return;
     }
 
-    matches.forEach(chat => {
+    chats.forEach(chat => {
       const item = document.createElement("div");
       item.className = "gpt-nav-item";
-      
-      const d = getChatDate(chat);
-      const timeStr = d ? d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
-
       item.innerHTML = `
-        <span class="gpt-history-date">${d.toLocaleDateString()} • ${timeStr}</span>
-        <span class="gpt-nav-text" style="font-weight:bold;">${chat.title || "Untitled Chat"}</span>
+        <div style="font-size:10px; color:#10a37f; margin-bottom:4px;">HISTORY CHAT</div>
+        <div class="gpt-nav-text" style="font-weight:600; color:#fff;">${chat.title || "Untitled Chat"}</div>
       `;
-
       item.onclick = () => window.location.href = `https://chatgpt.com/c/${chat.id}`;
       listContainer.appendChild(item);
     });
   }
 
-  function clearSearch() {
+  function resetUI() {
     currentMode = "PROMPTS";
-    datePicker.value = ""; 
-    clearBtn.style.display = "none";
-    listContainer.innerHTML = ""; 
-    scanPrompts(); 
+    datePicker.value = "";
+    listContainer.innerHTML = "";
+    scanPrompts();
   }
 
-  // --- LOCAL PROMPT SCANNING ---
   function scanPrompts() {
     if (currentMode === "HISTORY") return;
     const userMessages = document.querySelectorAll('[data-message-author-role="user"]');
     
-    // Clear list if user switched chats
     if (userMessages.length < listContainer.children.length) listContainer.innerHTML = "";
 
     for (let i = listContainer.children.length; i < userMessages.length; i++) {
       const msg = userMessages[i];
-      const cleanText = (msg.innerText || msg.textContent).split('\n')[0]; 
+      const text = (msg.innerText || "").split('\n')[0].substring(0, 60);
 
       const item = document.createElement("div");
       item.className = "gpt-nav-item";
       item.innerHTML = `
-        <span class="gpt-nav-index">PROMPT ${i + 1}</span>
-        <span class="gpt-nav-text">${cleanText || "View Prompt"}</span>
+        <div style="color:#10a37f; font-size:10px; font-weight:bold; margin-bottom:5px;">Q${i+1}</div>
+        <div class="gpt-nav-text">${text || "Media Content..."}</div>
       `;
-      
       item.onclick = () => {
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
         msg.classList.add("gpt-nav-highlighted");
         setTimeout(() => msg.classList.remove("gpt-nav-highlighted"), 2000);
       };
-
       listContainer.appendChild(item);
     }
   }
 
   function startObserver() {
-    let timeout;
     const observer = new MutationObserver(() => {
-      clearTimeout(timeout);
-      timeout = setTimeout(scanPrompts, 1000); 
+        if(currentMode === "PROMPTS") {
+            // Debounce scanning
+            clearTimeout(window.gptScanTimer);
+            window.gptScanTimer = setTimeout(scanPrompts, 1000);
+        }
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // Detect URL changes (Switching chats)
+  // Handle URL changes
   let lastUrl = location.href;
-  new MutationObserver(() => {
+  setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      listContainer.innerHTML = "";
-      setTimeout(scanPrompts, 1500);
+      resetUI();
     }
-  }).observe(document, { subtree: true, childList: true });
+  }, 1500);
 
-  setTimeout(init, 2000);
+  setTimeout(init, 2500);
 })();

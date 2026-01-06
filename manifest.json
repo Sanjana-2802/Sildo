@@ -1,6 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Slido Navigator",
+  "description":"A Chrome extension that adds a convenient sidebar to ChatGPT for long chats.",
+
   "version": "1.0",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],
