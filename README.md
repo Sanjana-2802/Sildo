@@ -45,6 +45,39 @@ A Chrome extension that adds a convenient sidebar to ChatGPT, allowing you to qu
 - Google Chrome browser
 - Access to ChatGPT (chat.openai.com)
 
+## 🚀 Future Enhancements
+
+### Version 2.0 Roadmap
+
+We're planning exciting features to supercharge your ChatGPT productivity:
+
+#### 1. 🔍 Keyword Full-Text Search *(Coming Next)*
+- Real-time search bar at the top of the sidebar
+- Filter prompts by keywords as you type
+- Find important conversations instantly without remembering dates
+
+#### 2. 📂 Prompt Bookmarking (Favorites)
+- Star your "Golden Prompts" - the ones that gave the best results
+- Create a Favorites tab to view only bookmarked prompts across all chats
+- Never lose track of your most valuable questions again
+
+#### 3. 📝 Prompt Templates (One-Click Injection)
+- Store commonly used prompts like "Summarize into bullet points" or "Refactor this code"
+- One-click insertion directly into ChatGPT's input box
+- Build your personal library of effective prompts
+
+#### 4. 📤 Export Conversation
+- Export current chat as Markdown or PDF
+- Perfect for documentation and sharing
+- Cleaner and faster than ChatGPT's native export
+
+#### 5. 🧠 Mini-Map / Summary View
+- AI-generated 3-word summaries for each prompt card
+- Visual overview of long conversations
+- Labels like "Bug Fix," "Brainstorming," or "Drafting" instead of truncated text
+
+*Have a feature request? Open an issue on GitHub!*
+
 ## License
 
 This project is open source and available for personal use.
